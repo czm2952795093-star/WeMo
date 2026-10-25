@@ -1,0 +1,15 @@
+services:
+  wemo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wemo:latest
+    container_name: wemo
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.production
+    volumes:
+      # SQLite 数据库持久化到服务器本地磁盘
+      - ./data:/data

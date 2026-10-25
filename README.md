@@ -2,6 +2,23 @@
 
 衣刻WeMo是一款面向手机 H5 的个人 AI 衣柜与穿搭助手。用户可以从照片中识别单品、生成白底商品图、维护个人衣柜，并获得穿搭推荐和试穿效果图。
 
+## 界面预览
+
+**移动端**（登录 → 首页 → 穿搭灵感 → 我的衣柜）：
+
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="登录页" width="180" />
+  <img src="docs/screenshots/home-mobile.png" alt="首页" width="180" />
+  <img src="docs/screenshots/inspiration-mobile.png" alt="穿搭灵感" width="180" />
+  <img src="docs/screenshots/wardrobe-mobile.png" alt="我的衣柜" width="180" />
+</p>
+
+**桌面端**：
+
+<p align="center">
+  <img src="docs/screenshots/home-desktop.png" alt="桌面端首页" width="720" />
+</p>
+
 ## 在线体验
 
 当前采用邀请码登录。如需试用，请添加微信 `CZM17882365794` 获取邀请码，添加时请备注「衣刻WeMo 试用」。
