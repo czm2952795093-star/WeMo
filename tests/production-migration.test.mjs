@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import test from "node:test";
 
 import {
@@ -17,7 +17,7 @@ const SOURCE_OWNER = "legacy-owner-primary";
 const OTHER_OWNER = "legacy-owner-secondary";
 
 function createSourceDatabase(path) {
-  const database = new DatabaseSync(path);
+  const database = new Database(path);
   database.exec(`
     CREATE TABLE wardrobe_items (
       id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL,
@@ -117,7 +117,7 @@ test("preparation copies, isolates, remaps and embeds without modifying the sour
     objectBytes: 22,
   });
 
-  const prepared = new DatabaseSync(paths.outputPath, { readOnly: true });
+  const prepared = new Database(paths.outputPath, { readonly: true });
   assert.equal(Object.values(prepared.prepare("PRAGMA quick_check").get())[0], "ok");
   for (const table of ["wardrobe_items", "model_profiles", "ai_tasks", "saved_outfits", "chat_history", "user_profiles"]) {
     assert.deepEqual(prepared.prepare(`SELECT DISTINCT owner_id AS ownerId FROM ${table}`).all().map(row => row.ownerId), [TARGET_OWNER]);
@@ -136,7 +136,7 @@ test("preparation copies, isolates, remaps and embeds without modifying the sour
 test("runtime extraction retries after failure and only drops the payload after success", async (t) => {
   const paths = await fixture(t);
   await prepareProductionMigration({ ...paths, sourceOwner: SOURCE_OWNER, targetOwnerId: TARGET_OWNER });
-  const database = new DatabaseSync(paths.outputPath);
+  const database = new Database(paths.outputPath);
   t.after(() => database.close());
 
   let attempts = 0;

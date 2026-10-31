@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 
 export const MIGRATION_OBJECTS_TABLE = "wemo_migration_objects";
 
@@ -24,7 +24,7 @@ export type SaveMigrationObject = (
   contentType: string,
 ) => Promise<void>;
 
-function tableExists(database: DatabaseSync, table: string): boolean {
+function tableExists(database: Database.Database, table: string): boolean {
   return Boolean(
     database
       .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -32,7 +32,7 @@ function tableExists(database: DatabaseSync, table: string): boolean {
   );
 }
 
-function targetOwner(database: DatabaseSync): string {
+function targetOwner(database: Database.Database): string {
   const owners = new Set<string>();
   for (const table of OWNER_TABLES) {
     if (!tableExists(database, table)) throw new Error("迁移包数据库结构不完整");
@@ -61,7 +61,7 @@ function assertSafeObjectKey(key: string, targetOwnerId: string): void {
   }
 }
 
-function referencedObjectKeys(database: DatabaseSync): Set<string> {
+function referencedObjectKeys(database: Database.Database): Set<string> {
   const rows = database
     .prepare(
       `SELECT image_key AS objectKey FROM wardrobe_items
@@ -79,7 +79,7 @@ function referencedObjectKeys(database: DatabaseSync): Set<string> {
  * leaves the table untouched so the next request can retry the complete set.
  */
 export async function extractEmbeddedMigrationObjects(
-  database: DatabaseSync,
+  database: Database.Database,
   saveObject: SaveMigrationObject,
 ): Promise<boolean> {
   if (!tableExists(database, MIGRATION_OBJECTS_TABLE)) return false;

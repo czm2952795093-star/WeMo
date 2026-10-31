@@ -1,5 +1,5 @@
 import mysql from "mysql2/promise";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import Database from "better-sqlite3";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { storageGet, storagePut } from "./storage";
@@ -55,7 +55,7 @@ async function getPool(): Promise<mysql.Pool> {
 const DEFAULT_BACKUP_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_BACKUP_DEBOUNCE_MS = 10 * 1000;
 
-let sqliteDbPromise: Promise<DatabaseSync> | null = null;
+let sqliteDbPromise: Promise<Database.Database> | null = null;
 let sqliteBackupTimer: NodeJS.Timeout | null = null;
 let sqlitePeriodicTimer: NodeJS.Timeout | null = null;
 let sqliteBackupPromise: Promise<void> | null = null;
@@ -88,7 +88,7 @@ function startPeriodicSqliteBackup(): void {
   sqlitePeriodicTimer.unref();
 }
 
-async function createSqlite(): Promise<DatabaseSync> {
+async function createSqlite(): Promise<Database.Database> {
   const databasePath = resolveSqlitePath();
   assertProductionBackupConfigured();
   await mkdir(dirname(databasePath), { recursive: true });
@@ -97,7 +97,7 @@ async function createSqlite(): Promise<DatabaseSync> {
     await restoreSqliteBackupIfMissing(databasePath, storageGet);
   }
 
-  const database = new DatabaseSync(databasePath);
+  const database = new Database(databasePath);
   try {
     database.exec("PRAGMA journal_mode = WAL;");
     database.exec("PRAGMA busy_timeout = 5000;");
@@ -113,7 +113,7 @@ async function createSqlite(): Promise<DatabaseSync> {
   }
 }
 
-function getSqlite(): Promise<DatabaseSync> {
+function getSqlite(): Promise<Database.Database> {
   if (!sqliteDbPromise) {
     sqliteDbPromise = createSqlite().catch((error: unknown) => {
       sqliteDbPromise = null;
@@ -208,7 +208,7 @@ export async function dbRun(sql: string, params: unknown[] = []): Promise<void> 
     return;
   }
   const database = await getSqlite();
-  database.prepare(toSqlite(sql)).run(...(params as SQLInputValue[]));
+  database.prepare(toSqlite(sql)).run(...(params as any[]));
   markSqliteDirty();
 }
 
@@ -219,7 +219,7 @@ export async function dbAll<T extends DbRow = DbRow>(sql: string, params: unknow
     return rows as T[];
   }
   const database = await getSqlite();
-  return database.prepare(toSqlite(sql)).all(...(params as SQLInputValue[])) as T[];
+  return database.prepare(toSqlite(sql)).all(...(params as any[])) as T[];
 }
 
 export async function dbFirst<T extends DbRow = DbRow>(sql: string, params: unknown[] = []): Promise<T | null> {
@@ -229,7 +229,7 @@ export async function dbFirst<T extends DbRow = DbRow>(sql: string, params: unkn
     return (rows as T[])[0] ?? null;
   }
   const database = await getSqlite();
-  const row = database.prepare(toSqlite(sql)).get(...(params as SQLInputValue[])) as T | undefined;
+  const row = database.prepare(toSqlite(sql)).get(...(params as any[])) as T | undefined;
   return row ?? null;
 }
 

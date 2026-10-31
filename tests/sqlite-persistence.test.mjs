@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import test from "node:test";
 import {
   resolveSqlitePath,
@@ -20,13 +20,13 @@ test("production SQLite defaults to veFaaS /tmp and accepts explicit paths", () 
   );
 });
 
-test("node:sqlite backup uploads and restores a consistent database", async (t) => {
+test("SQLite backup uploads and restores a consistent database", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "wemo-sqlite-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
 
   const sourcePath = join(directory, "source.sqlite");
   const restoredPath = join(directory, "restored.sqlite");
-  const source = new DatabaseSync(sourcePath);
+  const source = new Database(sourcePath);
   source.exec("CREATE TABLE outfits (id INTEGER PRIMARY KEY, title TEXT NOT NULL)");
   source.prepare("INSERT INTO outfits (title) VALUES (?)").run("通勤穿搭");
   source.exec("PRAGMA journal_mode = WAL");
@@ -48,7 +48,7 @@ test("node:sqlite backup uploads and restores a consistent database", async (t) 
   });
   assert.equal(restored, true);
 
-  const database = new DatabaseSync(restoredPath, { readOnly: true });
+  const database = new Database(restoredPath, { readonly: true });
   assert.deepEqual({ ...database.prepare("SELECT title FROM outfits").get() }, { title: "通勤穿搭" });
   database.close();
 });
@@ -57,7 +57,7 @@ test("restore never overwrites an existing local database", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "wemo-sqlite-existing-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const databasePath = join(directory, "wemo.sqlite");
-  const database = new DatabaseSync(databasePath);
+  const database = new Database(databasePath);
   database.exec("CREATE TABLE local_only (id INTEGER PRIMARY KEY)");
   database.close();
 
@@ -69,7 +69,7 @@ test("restore never overwrites an existing local database", async (t) => {
 
   assert.equal(restored, false);
   assert.equal(loadCalled, false);
-  const existing = new DatabaseSync(databasePath, { readOnly: true });
+  const existing = new Database(databasePath, { readonly: true });
   assert.ok(existing.prepare("SELECT name FROM sqlite_master WHERE name = 'local_only'").get());
   existing.close();
 });
@@ -83,5 +83,5 @@ test("restore rejects a corrupt cloud object without creating a local DB", async
     restoreSqliteBackupIfMissing(databasePath, async () => ({ body: new TextEncoder().encode("not sqlite") })),
     /不是有效的 SQLite/,
   );
-  assert.throws(() => new DatabaseSync(databasePath, { readOnly: true }));
+  assert.throws(() => new Database(databasePath, { readonly: true }));
 });

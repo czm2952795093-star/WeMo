@@ -3,7 +3,8 @@
 .vefaas
 .venv
 node_modules
-.next
+.next/standalone
+.next/cache
 .data
 data
 __pycache__

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { chmod, lstat, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { backup, DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 
 const TARGET_OWNER_PATTERN = /^usr-[a-f0-9]{40}$/;
 const OWNER_TABLES = [
@@ -198,17 +198,17 @@ export async function prepareProductionMigration({
   let sourceDatabase;
   let outputDatabase;
   try {
-    sourceDatabase = new DatabaseSync(sourcePath, { readOnly: true });
+    sourceDatabase = new Database(sourcePath, { readonly: true });
     assertQuickCheck(sourceDatabase);
     for (const table of OWNER_TABLES) {
       if (!tableExists(sourceDatabase, table)) throw new Error("Source database schema is incomplete");
     }
     const selectedOwner = selectSourceOwner(sourceDatabase, sourceOwner, source);
-    await backup(sourceDatabase, temporaryPath);
+    await sourceDatabase.backup(temporaryPath);
     sourceDatabase.close();
     sourceDatabase = undefined;
 
-    outputDatabase = new DatabaseSync(temporaryPath);
+    outputDatabase = new Database(temporaryPath);
     outputDatabase.exec("PRAGMA journal_mode = DELETE");
     pruneAndRemap(outputDatabase, selectedOwner, targetOwnerId);
     assertSavedOutfitReferences(outputDatabase);

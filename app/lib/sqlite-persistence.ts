@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -47,7 +47,7 @@ function assertSqliteHeader(body: Uint8Array): void {
 }
 
 function validateSqliteFile(path: string): void {
-  const database = new DatabaseSync(path, { readOnly: true });
+  const database = new Database(path, { readonly: true });
   try {
     const result = database.prepare("PRAGMA quick_check").get();
     if (!result || Object.values(result)[0] !== "ok") {
@@ -87,17 +87,13 @@ export async function restoreSqliteBackupIfMissing(
  * copying a live WAL database file directly.
  */
 export async function uploadSqliteSnapshot(
-  database: DatabaseSync,
+  database: Database.Database,
   databasePath: string,
   saveBackup: SaveSqliteBackup,
 ): Promise<void> {
   const snapshotPath = temporaryPath(databasePath, "snapshot");
   try {
-    const sqlite = await import("node:sqlite");
-    if (typeof sqlite.backup !== "function") {
-      throw new Error("当前 Node.js 不支持 node:sqlite backup；请使用 Node.js 22.16 或更高版本");
-    }
-    await sqlite.backup(database, snapshotPath);
+    await database.backup(snapshotPath);
     validateSqliteFile(snapshotPath);
     const snapshot = await readFile(snapshotPath);
     assertSqliteHeader(snapshot);

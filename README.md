@@ -21,7 +21,15 @@
 
 ## 在线体验
 
-当前采用邀请码登录。如需试用，请添加微信 `CZM17882365794` 获取邀请码，添加时请备注「衣刻WeMo 试用」。
+🌐 线上访问地址：<https://s7nflqv16lurrohpcvegk.apigateway-cn-beijing.volceapi.com/>
+
+当前采用邀请码登录，试用邀请码：
+
+- `WEMO-KXPZ4BS876HJ`
+- `WEMO-63L8DDXWHDWA`
+- `WEMO-D5ZFPDXXPAFS`
+
+如需更多邀请码，请添加微信 `CZM17882365794`，添加时备注「衣刻WeMo 试用」。
 
 ## 项目拆解
 
