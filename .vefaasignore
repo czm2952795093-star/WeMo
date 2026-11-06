@@ -1,18 +1,16 @@
-.git
-.github
-.vefaas
-.venv
-node_modules
-.next/standalone
-.next/cache
-.data
-data
-__pycache__
-.pytest_cache
-dist
-build
-work
-outputs
+/.git
+/.github
+/.vefaas
+/.venv
+/.next/cache
+/.data
+/data
+/__pycache__
+/.pytest_cache
+/dist
+/build
+/work
+/outputs
 
 .env
 .env.*
@@ -22,6 +20,6 @@ outputs
 *.tsbuildinfo
 .DS_Store
 
-tests
-docs
+/tests
+/docs
 AI*.md
