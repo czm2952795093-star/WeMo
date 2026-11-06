@@ -6,6 +6,7 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   globalIgnores([
     ".next/**",
+    ".vefaas/**",
     "dist/**",
     "out/**",
     "build/**",

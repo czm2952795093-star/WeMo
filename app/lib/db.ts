@@ -17,6 +17,7 @@ import {
 } from "./storage-request-context";
 
 export type DbRow = Record<string, unknown>;
+type SqliteValue = string | number | bigint | Buffer | null;
 
 /**
  * 双模式数据库访问层：
@@ -190,9 +191,11 @@ export async function flushSqliteBackup(): Promise<void> {
     sqliteBackupTimer = null;
   }
   const storageContext = getStorageRequestContext() ?? latestStorageRequestContext;
+  const targetRevision = sqliteRevision;
   await withStorageRequestContext(storageContext, async () => {
-    await backupDirtySqlite();
-    if (sqliteRevision > sqliteBackedUpRevision) await backupDirtySqlite();
+    while (sqliteBackedUpRevision < targetRevision) {
+      await backupDirtySqlite();
+    }
   });
 }
 
@@ -208,7 +211,7 @@ export async function dbRun(sql: string, params: unknown[] = []): Promise<void> 
     return;
   }
   const database = await getSqlite();
-  database.prepare(toSqlite(sql)).run(...(params as any[]));
+  database.prepare(toSqlite(sql)).run(...(params as SqliteValue[]));
   markSqliteDirty();
 }
 
@@ -219,7 +222,7 @@ export async function dbAll<T extends DbRow = DbRow>(sql: string, params: unknow
     return rows as T[];
   }
   const database = await getSqlite();
-  return database.prepare(toSqlite(sql)).all(...(params as any[])) as T[];
+  return database.prepare(toSqlite(sql)).all(...(params as SqliteValue[])) as T[];
 }
 
 export async function dbFirst<T extends DbRow = DbRow>(sql: string, params: unknown[] = []): Promise<T | null> {
@@ -229,7 +232,7 @@ export async function dbFirst<T extends DbRow = DbRow>(sql: string, params: unkn
     return (rows as T[])[0] ?? null;
   }
   const database = await getSqlite();
-  const row = database.prepare(toSqlite(sql)).get(...(params as any[])) as T | undefined;
+  const row = database.prepare(toSqlite(sql)).get(...(params as SqliteValue[])) as T | undefined;
   return row ?? null;
 }
 

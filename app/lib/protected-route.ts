@@ -1,4 +1,5 @@
 import { responseForAuthError } from "./auth";
+import { flushSqliteBackup } from "./db";
 import { apiErrorResponse, logServerEvent, traceIdFromRequest } from "./observability";
 import {
   captureStorageRequestContext,
@@ -28,7 +29,17 @@ export async function withProtectedApiRequest(
   const startedAt = Date.now();
   try {
     const storageContext = captureStorageRequestContext(request.headers);
-    const response = await withStorageRequestContext(storageContext, () => handler(request));
+    const response = await withStorageRequestContext(storageContext, async () => {
+      try {
+        return await handler(request);
+      } finally {
+        // Scale-to-zero instances can stop running timers after the response.
+        // A successful response must not leave the only durable copy pending.
+        if (process.env.TOS_BUCKET && !process.env.MYSQL_HOST) {
+          await flushSqliteBackup();
+        }
+      }
+    });
     logServerEvent(response.status >= 400 ? "warn" : "info", "api_request_completed", {
       trace_id: traceId,
       method: request.method,

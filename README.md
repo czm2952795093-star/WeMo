@@ -79,17 +79,17 @@ npm run build
 
 ## 生产架构约束
 
-当前线上采用早期轻量方案：一个常驻 veFaaS 实例、`/tmp` SQLite、TOS 固定键快照。以下约束是数据安全的一部分，不能单独放宽。
+当前线上采用早期轻量方案：veFaaS 最多一个实例、`/tmp` SQLite、TOS 固定键快照。原生 Node 20 的构建与发布方式见 [`docs/vefaas-native-deployment.md`](docs/vefaas-native-deployment.md)。
 
 - SQLite 只允许写入 `/tmp/data/wemo.sqlite`；容器内 `.data/` 仅供本地开发。
-- veFaaS 实例数必须同时设置为 `min=1`、`max=1`。
+- 当前选择 `min=0`、`max=1`，允许空闲时归零，不配置常驻预留实例。不得将上限提高到 1 以上。
 - 所有发布和回滚必须全量切换到单一版本，禁止灰度、流量拆分或多版本并行。
 - veFaaS 的整个 `/tmp` 空间上限为 512 MB，数据库、WAL、临时快照会共同占用它。数据库接近 200 MB 时就应安排迁移 MySQL，不能等到 512 MB 才处理。
 - 数据库快照固定保存为 TOS 对象 `db_backup/wemo.sqlite`，不要改成按实例或版本分叉的键。
-- 默认写入后约 10 秒触发防抖备份，并每 5 分钟补偿检查；灾难恢复目标 RPO 约 5 分钟，不是零数据丢失保证。
+- 受保护 API 在响应结束前等待本次数据库写入的 TOS 快照上传；失败时返回错误。10 秒防抖与 5 分钟定时检查仅作补偿，不依赖后台定时器保障已成功响应的写入。
 - 新实例本地数据库不存在时，会从固定 TOS 键下载、校验并原子恢复；运行中快照使用 SQLite backup API，禁止直接复制 WAL 数据库文件。
 
-`min=max=1` 既让 `/tmp` 所在实例常驻，也避免两个 SQLite 副本同时接受写入。实例故障、全量发布或平台迁移仍可能重建实例，因此 TOS 快照不可省略。
+`max=1` 避免常态下两个 SQLite 副本同时接受写入。实例归零、故障、全量发布或平台迁移都可能重建实例，因此 TOS 快照不可省略。发布期间仍须停止业务写入，避免新旧版本各自写入快照；该方案不提供数据库级跨实例事务或高可用保证。
 
 ## 生产环境变量
 
@@ -192,19 +192,19 @@ docker buildx build \
 - 运行类型：Web 应用函数，镜像部署
 - 启动命令：`node server.js`
 - 监听端口：`8000`
-- 当前规格：1 vCPU / 2 GiB
+- 当前原生运行时规格：0.5 vCPU / 1 GiB
 - 请求超时：按最长 AI 链路配置，函数上限 900 秒
 - 公网出方向：开启，用于访问模型服务
 - 环境变量：先配置完整，再发布
 - IAM Role：绑定最小权限 TOS Role
 
-首次发布成功后再设置实例上下限：
+当前不配置常驻预留实例，实例上下限为：
 
 ```bash
-vefaas fn scale --id <FUNCTION_ID> --min 1 --max 1 --region cn-beijing -o json
+vefaas fn scale --id <FUNCTION_ID> --min 0 --max 1 --region cn-beijing -o json
 ```
 
-该命令会直接开始预留实例计费，CLI 不会再次弹出费用确认。执行前必须获得资源所有者明确同意。随后确认：
+`min=0` 不配置常驻预留实例，实际调用与运行资源仍按平台规则计费。若以后改为 `min=1`，需要先确认新增常驻费用。随后确认：
 
 ```bash
 vefaas fn scale --id <FUNCTION_ID> --region cn-beijing -o json
@@ -238,12 +238,12 @@ vefaas trigger apig bind \
 
 所有金额以创建资源时控制台报价和实际账单为准。
 
-- veFaaS：当前 1 vCPU / 2 GiB 普通预留实例约 `0.21924 元/小时`，约 `157.85 元/30 天`；另计调用次数和函数公网出流量。
+- veFaaS：当前 `min=0,max=1`，不使用常驻预留实例；按实际运行、调用和函数公网出流量等计费。
 - Serverless API 网关：网关管理费为 0；北京固定 CLB 约 `0.0088 元/小时`，约 `6.34 元/30 天`，另计公网流量。
 - TOS：对象容量、请求次数和出网流量计费。
 - 模型服务：视觉理解、商品图和试穿图按各模型服务规则计费。
 
-按当前规格估算，函数预留实例与网关固定入口合计约 `164.19 元/30 天`，不含 TOS、模型调用、函数调用次数和公网流量。以控制台创建页和实际账单为准。
+当前不采用此前的常驻实例月费估算，实际总费用取决于使用量及平台账单。
 
 ## 日志与错误监控
 
@@ -285,7 +285,7 @@ vefaas fn rollback <REVISION> --id <FUNCTION_ID> --region cn-beijing
 vefaas fn release-record status --id <FUNCTION_ID> --region cn-beijing -o json
 ```
 
-回滚后必须确认旧 revision 获得 100% 流量、实例仍为 `min=max=1`，然后重跑登录、数据隔离、图片读写和 SQLite 恢复冒烟测试。若需要恢复业务数据，应使用经过校验的 TOS 数据库快照；不要把运行中的 `wemo.sqlite-wal` 或 `wemo.sqlite-shm` 当作独立备份。
+回滚后必须确认旧 revision 获得 100% 流量、实例仍为 `min=0,max=1`，然后重跑登录、数据隔离、图片读写和 SQLite 恢复冒烟测试。若需要恢复业务数据，应使用经过校验的 TOS 数据库快照；不要把运行中的 `wemo.sqlite-wal` 或 `wemo.sqlite-shm` 当作独立备份。
 
 ## MySQL 扩展路线
 

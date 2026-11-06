@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
-function read(relativePath) {
-  return readFile(new URL(relativePath, import.meta.url), "utf8");
+async function read(relativePath) {
+  return (await readFile(new URL(relativePath, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 }
 
 function sectionBetween(source, startMarker, endMarker) {

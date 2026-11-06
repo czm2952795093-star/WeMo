@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import Database from "better-sqlite3";
 import test from "node:test";
 import {
@@ -13,10 +13,10 @@ import {
 
 test("production SQLite defaults to veFaaS /tmp and accepts explicit paths", () => {
   assert.equal(resolveSqlitePath({ NODE_ENV: "production" }, "/workspace"), "/tmp/data/wemo.sqlite");
-  assert.equal(resolveSqlitePath({ SQLITE_PATH: "var/wemo.sqlite" }, "/workspace"), "/workspace/var/wemo.sqlite");
+  assert.equal(resolveSqlitePath({ SQLITE_PATH: "var/wemo.sqlite" }, "/workspace"), resolve("/workspace", "var/wemo.sqlite"));
   assert.equal(
     resolveSqlitePath({ DATABASE_URL: "sqlite:////tmp/custom/wemo.sqlite" }, "/workspace"),
-    "/tmp/custom/wemo.sqlite",
+    resolve("/workspace", "//tmp/custom/wemo.sqlite"),
   );
 });
 

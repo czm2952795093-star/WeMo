@@ -137,25 +137,28 @@ test("runtime extraction retries after failure and only drops the payload after 
   const paths = await fixture(t);
   await prepareProductionMigration({ ...paths, sourceOwner: SOURCE_OWNER, targetOwnerId: TARGET_OWNER });
   const database = new Database(paths.outputPath);
-  t.after(() => database.close());
 
-  let attempts = 0;
-  await assert.rejects(
-    extractEmbeddedMigrationObjects(database, async () => {
-      attempts += 1;
-      if (attempts === 2) throw new Error("simulated upload failure");
-    }),
-    /simulated upload failure/,
-  );
-  assert.ok(database.prepare("SELECT 1 FROM sqlite_master WHERE name = ?").get(MIGRATION_OBJECTS_TABLE));
+  try {
+    let attempts = 0;
+    await assert.rejects(
+      extractEmbeddedMigrationObjects(database, async () => {
+        attempts += 1;
+        if (attempts === 2) throw new Error("simulated upload failure");
+      }),
+      /simulated upload failure/,
+    );
+    assert.ok(database.prepare("SELECT 1 FROM sqlite_master WHERE name = ?").get(MIGRATION_OBJECTS_TABLE));
 
-  const uploaded = new Map();
-  assert.equal(await extractEmbeddedMigrationObjects(database, async (key, body, contentType) => {
-    uploaded.set(key, { body: Buffer.from(body).toString(), contentType });
-  }), true);
-  assert.equal(uploaded.size, 4);
-  assert.equal(database.prepare("SELECT 1 FROM sqlite_master WHERE name = ?").get(MIGRATION_OBJECTS_TABLE), undefined);
-  assert.equal(await extractEmbeddedMigrationObjects(database, async () => assert.fail("must not upload twice")), false);
+    const uploaded = new Map();
+    assert.equal(await extractEmbeddedMigrationObjects(database, async (key, body, contentType) => {
+      uploaded.set(key, { body: Buffer.from(body).toString(), contentType });
+    }), true);
+    assert.equal(uploaded.size, 4);
+    assert.equal(database.prepare("SELECT 1 FROM sqlite_master WHERE name = ?").get(MIGRATION_OBJECTS_TABLE), undefined);
+    assert.equal(await extractEmbeddedMigrationObjects(database, async () => assert.fail("must not upload twice")), false);
+  } finally {
+    database.close();
+  }
 });
 
 test("preparation rejects a missing referenced object and leaves no output", async (t) => {
