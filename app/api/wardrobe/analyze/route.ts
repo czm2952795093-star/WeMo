@@ -505,7 +505,7 @@ async function handlePOST(request: Request) {
     const arkVisionModel = getServerEnv("ARK_VISION_MODEL").trim();
     // Ark model access is account-specific. An API key alone is insufficient:
     // only enable the fallback when an authorized model/endpoint ID is explicit.
-    const arkFallback: VisionProvider | null = arkApiKey && arkVisionModel ? {
+    const arkFallback: VisionProvider | null = primaryProvider.name === "dashscope" && arkApiKey && arkVisionModel ? {
       name: "volcengine-ark",
       apiKey: arkApiKey,
       model: arkVisionModel,

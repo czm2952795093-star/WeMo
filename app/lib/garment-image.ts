@@ -1,5 +1,5 @@
 import { decodeGarmentTags, normalizeGarmentAITags, type GarmentAITags } from "./garment-tags";
-import { requestBlob, requestJson } from "./api-client";
+import { ApiError, requestBlob, requestJson } from "./api-client";
 import {
   garmentReconstructionReasons,
   requiresGarmentReconstruction,
@@ -685,6 +685,7 @@ export async function processGarmentUpload(
   // atlas remains an optimization for clean product photos; full-outfit
   // coverage comes from the two complementary Qwen detection passes.
   const detectionsPromise = analyzeGarments(normalizedBlob);
+  let cutoutUnavailable = "";
   const atlasSegmentationPromise = productizeGarment(
     normalizedBlob,
     "服饰整图",
@@ -693,7 +694,10 @@ export async function processGarmentUpload(
     wholeTags,
     7_800,
     { atlasClasses: ["tops", "pants"], combinedAtlas: options.combinedAtlas, priority: "background" },
-  ).catch(() => null);
+  ).catch(error => {
+    if (error instanceof ApiError && error.code === "KIMI_IMAGE_UNAVAILABLE") cutoutUnavailable = error.message;
+    return null;
+  });
 
   let detections: GarmentDetection[];
   try {
@@ -855,7 +859,7 @@ export async function processGarmentUpload(
           }
         }
 
-        if (!usedAtlasSegmentation) {
+        if (!usedAtlasSegmentation && !cutoutUnavailable) {
           const fallbackBudget = Math.floor(processingDeadline - performance.now());
           if (fallbackBudget >= minimumFallbackBudgetMs) {
             try {
@@ -872,8 +876,9 @@ export async function processGarmentUpload(
               cutoutQuality = generated.quality;
               aiTags = generated.aiTags;
               cutoutProvider = generated.provider;
-            } catch {
+            } catch (error) {
               // 保留原始裁剪图供用户诊断，不会把不可靠的本地抠图自动加入衣柜。
+              if (error instanceof ApiError && error.code === "KIMI_IMAGE_UNAVAILABLE") cutoutUnavailable = error.message;
             }
           }
         }
@@ -884,7 +889,7 @@ export async function processGarmentUpload(
             blob: sourceBlob,
             cutoutQuality: "failed" as const,
             completionStatus: "failed" as const,
-            reconstructionReasons: ["没有生成可靠的完整白底商品图，请换清晰照片重试"],
+            reconstructionReasons: [cutoutUnavailable || "没有生成可靠的完整白底商品图，请换清晰照片重试"],
             reconstructionTask: undefined,
           };
         }

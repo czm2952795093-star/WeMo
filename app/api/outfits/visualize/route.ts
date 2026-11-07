@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { getServerEnv, requireServerEnv } from "../../../lib/server-env";
+import { isKimiOnlyMode, kimiImageUnavailable } from "../../../lib/vision-provider";
 import { getOwner, ownerJson, withOwnerCookie } from "../../../lib/owner";
 import { dbAll, dbFirst } from "../../../lib/db";
 import { storageGet, storagePut } from "../../../lib/storage";
@@ -267,6 +268,7 @@ async function handlePOST(request: Request) {
     if (existing?.status === "succeeded") return storedResult(existing, owner);
     if (existing?.status === "failed") return ownerJson({ task: taskPayload(existing), error: "上次效果图生成失败，请点击重试" }, owner, 409);
     if (existing) return ownerJson({ task: taskPayload(existing) }, owner, 202);
+    if (isKimiOnlyMode()) return ownerJson(kimiImageUnavailable("生成试穿效果图"), owner, 503);
     const contentType = request.headers.get("content-type") || "";
     if (!contentType.includes("multipart/form-data")) return ownerJson({ error: "请刷新页面后重新生成效果图" }, owner, 400);
     const form = await request.formData();

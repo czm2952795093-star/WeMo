@@ -7,6 +7,14 @@ export type VisionProvider = {
   model: string;
 };
 
+export function isKimiOnlyMode() {
+  return Boolean(getServerEnv("MOONSHOT_API_KEY"));
+}
+
+export function kimiImageUnavailable(feature: string) {
+  return { error: `当前仅使用 Kimi，暂不支持${feature}`, code: "KIMI_IMAGE_UNAVAILABLE" };
+}
+
 export function getPrimaryVisionProvider(): VisionProvider {
   const kimiKey = getServerEnv("MOONSHOT_API_KEY");
   if (kimiKey) {

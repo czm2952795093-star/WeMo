@@ -4,6 +4,7 @@ import { requireSession, responseForAuthError } from "../../../lib/auth";
 import { apiErrorResponse, logServerEvent } from "../../../lib/observability";
 import { withProtectedApiRequest } from "../../../lib/protected-route";
 import { getServerEnv, requireServerEnv } from "../../../lib/server-env";
+import { isKimiOnlyMode, kimiImageUnavailable } from "../../../lib/vision-provider";
 import { inspectGarmentComponents } from "../../../lib/garment-component-quality";
 
 type DashScopeImagePayload = {
@@ -759,6 +760,7 @@ async function handlePOST(request: Request) {
       resultCache.set(key, cached);
       return productResponse(cached, "HIT", Math.round(performance.now() - startedAt));
     }
+    if (isKimiOnlyMode()) return Response.json(kimiImageUnavailable("衣物补全"), { status: 503 });
     const running = inFlight.get(key);
     if (running) {
       const result = await running;

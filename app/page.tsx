@@ -1036,6 +1036,7 @@ function WeMoApp() {
                   selected: false,
                   cutoutQuality: "failed",
                   completionStatus: "failed",
+                  reconstructionReasons: [outcome.error],
                   reconstructionTask: undefined,
                 } : item));
                 return;
@@ -1737,7 +1738,7 @@ function GarmentDraftCard({
   const previewNotice = generating
     ? `已识别为${draft.category}，正在生成高清完整商品图`
     : failed
-      ? "未生成完整商品图，请换清晰照片"
+      ? draft.reconstructionReasons[0] || "未生成完整商品图，请换清晰照片"
       : aiReady
         ? "AI 已补全隐藏部分，请确认版型与图案"
         : draft.cutoutQuality === "review"

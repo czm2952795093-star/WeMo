@@ -101,7 +101,8 @@ INVITE_CODES=<逗号分隔的高熵邀请码，每个至少 12 个字符>
 SESSION_SECRET=<至少 32 个字符的随机密钥>
 OWNER_ID_SECRET=<另一份至少 32 个字符的随机密钥>
 
-# 可选：启用 Kimi 衣物识别、搭配推荐和点评。生图仍由百炼或方舟处理。
+# 可选：设置后只调用 Kimi，支持衣物识别、搭配推荐和点评。
+# 新试穿、补图和自动抠图不可用。预置图片和已生成结果仍可读取。
 MOONSHOT_API_KEY=
 
 DASHSCOPE_API_KEY=<secret>
