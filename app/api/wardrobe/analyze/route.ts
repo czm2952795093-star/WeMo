@@ -28,6 +28,7 @@ const visionDetectionTimeoutMs = 24_000;
 const kimiDetectionTimeoutMs = 48_000;
 const defaultArkBaseUrl = "https://ark.cn-beijing.volces.com/api/v3";
 const allowedCategories = new Set(["上衣", "外套", "裤子", "裙子", "连衣裙", "鞋子", "帽子", "腰带", "包", "首饰", "其他配饰"]);
+const kimiOutfitPrompt = `从头到脚识别照片里所有可单独入柜的衣物和配饰，包括露出的内搭、裤裙、一双鞋、独立腰带、包、帽子、围巾、领带和首饰。忽略背景、手机、服装自带的系带和同款重复展示。只返回单行紧凑 JSON 数组。每件用固定顺序的短数组：[类别,颜色,[xmin,ymin,xmax,ymax],是否遮挡,置信度,可见比例,在图中的位置,"worn或product",款式简称,款式细节]。类别限上衣、外套、裤子、裙子、连衣裙、鞋子、帽子、腰带、包、首饰、其他配饰；衬衫和背心归上衣。框坐标为0到1000，置信度和可见比例为0到1，遮挡为布尔值。穿戴、手持用worn，独立商品用product。位置2到6个字，款式简称用于同款去重，款式细节最多20字，保留领口、袖长、版型及明显图案。不要输出解释。`;
 
 class DetectionProviderError extends Error {
   constructor(
@@ -243,7 +244,16 @@ async function requestDetectionsWithFallback(
 function cleanDetections(value: unknown[]) {
   return value.slice(0, 20).flatMap((entry, index): Detection[] => {
     if (!entry || typeof entry !== "object") return [];
-    const item = entry as Record<string, unknown>;
+    let item = entry as Record<string, unknown>;
+    if (Array.isArray(entry)) {
+      if (entry.length !== 10) return [];
+      const [category, color, box, occluded, confidence, visibleRatio, evidence, depiction, identity, description] = entry;
+      item = {
+        category, color, bbox_2d: box, partially_occluded: occluded, confidence,
+        visible_ratio: visibleRatio, source_evidence: evidence, depiction_type: depiction,
+        identity_key: identity, garment_description: description, is_real_item: true,
+      };
+    }
     const rawBox = Array.isArray(item.bbox_2d) ? item.bbox_2d.map(Number) : [];
     if (rawBox.length !== 4 || rawBox.some(number => !Number.isFinite(number))) return [];
     let [x1, y1, x2, y2] = rawBox;
@@ -519,7 +529,7 @@ ${jsonRules}`;
     // concurrency quota before either response is complete.
     const useKimi = primaryProvider.name === "moonshot";
     const detectionRuns = await Promise.allSettled(useKimi
-      ? [requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, detailPrompt, kimiDetectionTimeoutMs)]
+      ? [requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, kimiOutfitPrompt, kimiDetectionTimeoutMs)]
       : [
         requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, outfitPrompt),
         requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, detailPrompt),
