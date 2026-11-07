@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getServerEnv, requireServerEnv } from "../../../lib/server-env";
-import { isKimiOnlyMode, kimiImageUnavailable } from "../../../lib/vision-provider";
+import { isKimiOnlyMode, kimiImageUnavailable, usesArkImages } from "../../../lib/vision-provider";
 import { getOwner, ownerJson } from "../../../lib/owner";
 import { dbAll, dbRun, ensureSchema } from "../../../lib/db";
 import { storageDelete, storageGet, storagePut } from "../../../lib/storage";
@@ -317,6 +317,7 @@ async function generateProductImage(drawPrompt: string): Promise<ProductImage> {
     throw new ProductImageProviderError(unavailable.error, 503, unavailable.code);
   }
   const prompt = productImagePrompt(drawPrompt);
+  if (usesArkImages()) return arkProductImageWithSafeLog(prompt);
   const arkConfigured = Boolean(getServerEnv("ARK_API_KEY"));
   if (arkConfigured && Date.now() < dashScopeUnavailableUntil) {
     return arkProductImageWithSafeLog(prompt);

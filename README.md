@@ -101,9 +101,11 @@ INVITE_CODES=<逗号分隔的高熵邀请码，每个至少 12 个字符>
 SESSION_SECRET=<至少 32 个字符的随机密钥>
 OWNER_ID_SECRET=<另一份至少 32 个字符的随机密钥>
 
-# 可选：设置后只调用 Kimi，支持衣物识别、搭配推荐和点评。
-# 新试穿、补图和自动抠图不可用。预置图片和已生成结果仍可读取。
+# 可选：使用 Kimi 做衣物识别、搭配推荐和点评。
+# 设置 IMAGE_MODEL_PROVIDER=ark 和有效的 ARK_API_KEY 可启用方舟试穿和补图。
+# 抠图或补图不可用时，可确认裁剪照片后入柜。
 MOONSHOT_API_KEY=
+IMAGE_MODEL_PROVIDER=
 
 DASHSCOPE_API_KEY=<secret>
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1

@@ -24,6 +24,7 @@ export type ProcessedGarmentImage = {
   /** Stable across recognition preview, segmentation and AI reconstruction. */
   draftKey: string;
   blob: Blob;
+  sourceCrop?: Blob;
   previewUrl: string;
   originalUrl: string;
   category: string;
@@ -35,7 +36,7 @@ export type ProcessedGarmentImage = {
   cutoutQuality: "good" | "review" | "failed";
   aiTags: GarmentAITags;
   completionStatus: GarmentCompletionStatus;
-  productOrigin: "source-preview" | "segmentation" | "ai-reconstructed";
+  productOrigin: "source-preview" | "photo-confirmed" | "segmentation" | "ai-reconstructed";
   cutoutProvider?: "comfyui-birefnet" | "aliyun-viapi";
   reconstructionReasons: string[];
   depictionType: GarmentDepictionType;
@@ -695,7 +696,7 @@ export async function processGarmentUpload(
     7_800,
     { atlasClasses: ["tops", "pants"], combinedAtlas: options.combinedAtlas, priority: "background" },
   ).catch(error => {
-    if (error instanceof ApiError && error.code === "KIMI_IMAGE_UNAVAILABLE") cutoutUnavailable = error.message;
+    if (error instanceof ApiError && error.code === "CUTOUT_UNAVAILABLE") cutoutUnavailable = error.message;
     return null;
   });
 
@@ -777,6 +778,7 @@ export async function processGarmentUpload(
         const draft: ProcessedGarmentImage = {
           draftKey,
           blob: previewBlob,
+          sourceCrop: sourceBlob,
           previewUrl: URL.createObjectURL(previewBlob),
           originalUrl: URL.createObjectURL(normalizedBlob),
           category,
@@ -878,7 +880,7 @@ export async function processGarmentUpload(
               cutoutProvider = generated.provider;
             } catch (error) {
               // 保留原始裁剪图供用户诊断，不会把不可靠的本地抠图自动加入衣柜。
-              if (error instanceof ApiError && error.code === "KIMI_IMAGE_UNAVAILABLE") cutoutUnavailable = error.message;
+              if (error instanceof ApiError && error.code === "CUTOUT_UNAVAILABLE") cutoutUnavailable = error.message;
             }
           }
         }

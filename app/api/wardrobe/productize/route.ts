@@ -9,7 +9,7 @@ import {
 } from "../../../lib/aliyun-segmentation";
 import { apiErrorResponse, logServerEvent } from "../../../lib/observability";
 import { withProtectedApiRequest } from "../../../lib/protected-route";
-import { isKimiOnlyMode, kimiImageUnavailable } from "../../../lib/vision-provider";
+import { isKimiConfigured } from "../../../lib/vision-provider";
 
 type CachedProduct = {
   quality: "good" | "review";
@@ -159,7 +159,9 @@ async function handlePOST(request: Request) {
       );
     }
 
-    if (isKimiOnlyMode()) return Response.json(kimiImageUnavailable("自动抠图"), { status: 503 });
+    if (isKimiConfigured()) {
+      return Response.json({ error: "自动抠图暂不可用，可确认裁剪照片后入柜", code: "CUTOUT_UNAVAILABLE" }, { status: 503 });
+    }
     const segmented = await segmentGarmentToWhiteBackground(sourceBuffer, api, {
       preserveGeometry,
       atlasClasses,

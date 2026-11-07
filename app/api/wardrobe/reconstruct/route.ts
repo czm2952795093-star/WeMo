@@ -4,7 +4,7 @@ import { requireSession, responseForAuthError } from "../../../lib/auth";
 import { apiErrorResponse, logServerEvent } from "../../../lib/observability";
 import { withProtectedApiRequest } from "../../../lib/protected-route";
 import { getServerEnv, requireServerEnv } from "../../../lib/server-env";
-import { isKimiOnlyMode, kimiImageUnavailable } from "../../../lib/vision-provider";
+import { isKimiOnlyMode, kimiImageUnavailable, usesArkImages } from "../../../lib/vision-provider";
 import { inspectGarmentComponents } from "../../../lib/garment-component-quality";
 
 type DashScopeImagePayload = {
@@ -609,6 +609,7 @@ async function requestArkReconstruction(input: ReconstructionRequest, deadlineAt
 async function requestReconstruction(input: ReconstructionRequest) {
   const startedAt = performance.now();
   const deadlineAt = startedAt + reconstructionDeadlineMs;
+  if (usesArkImages()) return requestArkReconstruction(input, deadlineAt);
   try {
     return await requestAliyunReconstruction(input, deadlineAt);
   } catch (error) {

@@ -7,8 +7,16 @@ export type VisionProvider = {
   model: string;
 };
 
-export function isKimiOnlyMode() {
+export function isKimiConfigured() {
   return Boolean(getServerEnv("MOONSHOT_API_KEY"));
+}
+
+export function usesArkImages() {
+  return getServerEnv("IMAGE_MODEL_PROVIDER") === "ark";
+}
+
+export function isKimiOnlyMode() {
+  return isKimiConfigured() && !usesArkImages();
 }
 
 export function kimiImageUnavailable(feature: string) {

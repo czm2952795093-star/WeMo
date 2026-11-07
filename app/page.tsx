@@ -1725,6 +1725,8 @@ function GarmentDraftCard({
   const generating = draft.completionStatus === "generating";
   const failed = draft.completionStatus === "failed" || draft.cutoutQuality === "failed";
   const aiReady = draft.completionStatus === "ready" && draft.productOrigin === "ai-reconstructed";
+  const photoConfirmed = draft.productOrigin === "photo-confirmed";
+  const selectableCrop = failed ? draft.sourceCrop : undefined;
   const disabled = generating || failed;
   const stateLabel = generating
     ? "已识别 · 生成中"
@@ -1739,7 +1741,9 @@ function GarmentDraftCard({
     ? `已识别为${draft.category}，正在生成高清完整商品图`
     : failed
       ? draft.reconstructionReasons[0] || "未生成完整商品图，请换清晰照片"
-      : aiReady
+      : photoConfirmed
+        ? "使用裁剪照片，保留原有背景或遮挡"
+        : aiReady
         ? "AI 已补全隐藏部分，请确认版型与图案"
         : draft.cutoutQuality === "review"
           ? "原图信息不足，请谨慎确认"
@@ -1753,7 +1757,9 @@ function GarmentDraftCard({
     ? "低清识别预览 · 清晰图生成中"
     : failed
       ? "未生成完整商品图"
-      : aiReady
+      : photoConfirmed
+        ? "裁剪照片"
+        : aiReady
         ? "AI 补全 · 待确认"
         : draft.cutoutQuality === "good"
           ? `完整白底商品图${providerLabel ? ` · ${providerLabel}` : ""}`
@@ -1780,6 +1786,14 @@ function GarmentDraftCard({
       <label>分类<select disabled={generating} value={draft.category} onChange={event => onUpdate({ category: event.target.value })}>{["待识别", "上衣", "外套", "下装", "连衣裙", "鞋履", "配饰", "帽子"].map(value => <option key={value}>{value}</option>)}</select></label>
       <label>季节<select disabled={generating} value={draft.season} onChange={event => onUpdate({ season: event.target.value })}>{["四季", "春秋", "夏季", "冬季"].map(value => <option key={value}>{value}</option>)}</select></label>
     </div>
+    {selectableCrop && <button type="button" className="draft-use-photo" onClick={() => onUpdate({
+      blob: selectableCrop,
+      cutoutQuality: "review",
+      completionStatus: "not-needed",
+      productOrigin: "photo-confirmed",
+      reconstructionReasons: [],
+      selected: true,
+    })}>选用裁剪照片</button>}
     <div className="recognized-tags">
       <span><i style={{ background: draft.colorHex }} />{draft.colorName}</span>
       {garmentTagLabels(draft.aiTags).slice(0, 4).map(tag => <span key={tag}>{tag}</span>)}
