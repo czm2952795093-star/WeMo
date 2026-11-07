@@ -356,7 +356,7 @@ async function analyzeGarments(image: Blob) {
   const { data } = await requestJson<{ detections?: GarmentDetection[] }>("/api/wardrobe/analyze", {
     method: "POST",
     body: form,
-    timeoutMs: 27_000,
+    timeoutMs: 52_000,
   });
   if (!data.detections?.length) throw new Error("没有识别到单品");
   return data.detections;

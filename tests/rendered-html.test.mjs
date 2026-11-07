@@ -106,7 +106,8 @@ test("业务逻辑保留：第一阶段衣柜工作流", async () => {
   assert.match(processor, /canvasToBlob/);
   assert.match(api, /storagePut/);
   assert.match(api, /ai_tags/);
-  assert.match(analyzer, /qwen3-vl-flash/);
+  assert.match(analyzer, /getPrimaryVisionProvider\(\)/);
+  assert.match(await read("../app/lib/vision-provider.ts"), /qwen3-vl-flash/);
   assert.match(analyzer, /mergePairs/);
   assert.match(analyzer, /removeItemsHiddenByOuterwear/);
   assert.match(analyzer, /addMissingFocusedItems/);
@@ -122,7 +123,7 @@ test("业务逻辑保留：第一阶段衣柜工作流", async () => {
   assert.match(analyzer, /visionDetectionTimeoutMs = 24_000/);
   assert.match(analyzer, /timeoutMs = visionDetectionTimeoutMs/);
   assert.match(analyzer, /AbortSignal\.timeout\(timeoutMs\)/);
-  assert.match(analyzer, /max_tokens: 1_600/);
+  assert.match(analyzer, /visionChatOptions\(provider, 0\.1, 1_600\)/);
   assert.match(analyzer, /Promise\.allSettled/);
   assert.match(analyzer, /outfitPrompt/);
   assert.match(analyzer, /detailPrompt/);
@@ -229,7 +230,7 @@ test("业务逻辑保留：第二阶段个人模特与可恢复穿搭工作流",
   assert.match(recommendApi, /候选搭配/);
   assert.match(recommendApi, /candidateId/);
   assert.match(recommendApi, /不得新增、删除或替换候选里的单品/);
-  assert.match(recommendApi, /AbortSignal\.timeout\(3_800\)/);
+  assert.match(recommendApi, /AbortSignal\.timeout\(provider\.name === "moonshot" \? 20_000 : 3_800\)/);
   assert.match(recommendApi, /rules-fallback/);
   assert.match(outfitEngine, /scoreBreakdown/);
   assert.match(outfitEngine, /breakdown\.color \* \.25/);

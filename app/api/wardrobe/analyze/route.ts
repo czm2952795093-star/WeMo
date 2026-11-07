@@ -1,4 +1,5 @@
-import { requireServerEnv, getServerEnv } from "../../../lib/server-env";
+import { getServerEnv } from "../../../lib/server-env";
+import { getPrimaryVisionProvider, visionChatOptions, type VisionProvider } from "../../../lib/vision-provider";
 import { requireSession, responseForAuthError } from "../../../lib/auth";
 import { apiErrorResponse, logServerEvent } from "../../../lib/observability";
 import { withProtectedApiRequest } from "../../../lib/protected-route";
@@ -20,23 +21,17 @@ type Detection = {
   tags?: GarmentAITags;
 };
 
-// Two complementary Qwen passes run in parallel. A slightly wider per-pass
+// Two complementary vision passes run in parallel. A slightly wider per-pass
 // window is still much faster than serial retries and prevents the client from
 // falling back to a clothing-only mask when accessories take longer to name.
 const visionDetectionTimeoutMs = 24_000;
+const kimiDetectionTimeoutMs = 48_000;
 const defaultArkBaseUrl = "https://ark.cn-beijing.volces.com/api/v3";
 const allowedCategories = new Set(["上衣", "外套", "裤子", "裙子", "连衣裙", "鞋子", "帽子", "腰带", "包", "首饰", "其他配饰"]);
 
-type DetectionProviderConfig = {
-  name: "dashscope" | "volcengine-ark";
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-};
-
 class DetectionProviderError extends Error {
   constructor(
-    readonly provider: DetectionProviderConfig["name"],
+    readonly provider: VisionProvider["name"],
     readonly status: number,
     readonly code: string,
     message: string,
@@ -165,22 +160,17 @@ function shouldFallbackToArk(error: unknown) {
   return error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name);
 }
 
-async function requestDetections(provider: DetectionProviderConfig, imageData: string, prompt: string, timeoutMs = visionDetectionTimeoutMs) {
-  const requestBody: Record<string, unknown> = {
-    model: provider.model,
-    temperature: 0.1,
+async function requestDetections(provider: VisionProvider, imageData: string, prompt: string, timeoutMs = visionDetectionTimeoutMs) {
+  const requestBody = {
     // A full-body photo can legitimately contain 8-12 separate items. Keep
     // enough room for every bbox and description instead of truncating the
     // JSON after the first few garments.
-    max_tokens: 1_600,
+    ...visionChatOptions(provider, 0.1, 1_600),
     messages: [{ role: "user", content: [
       { type: "image_url", image_url: { url: imageData } },
       { type: "text", text: prompt },
     ] }],
   };
-  // enable_thinking is a DashScope-compatible extension and is rejected by
-  // some OpenAI-compatible providers, so never send it to Volcengine Ark.
-  if (provider.name === "dashscope") requestBody.enable_thinking = false;
 
   const response = await fetch(`${provider.baseUrl}/chat/completions`, {
     method: "POST",
@@ -194,7 +184,8 @@ async function requestDetections(provider: DetectionProviderConfig, imageData: s
   if (!response.ok) {
     const providerError = payload.error as Record<string, unknown> | undefined;
     const message = providerError?.message;
-    const code = typeof providerError?.code === "string" ? providerError.code : "unknown";
+    const errorCode = providerError?.code ?? providerError?.type;
+    const code = typeof errorCode === "string" ? errorCode : "unknown";
     logServerEvent("warn", "wardrobe_detection_provider_rejected", {
       provider: provider.name,
       model: provider.model,
@@ -215,8 +206,8 @@ async function requestDetections(provider: DetectionProviderConfig, imageData: s
 }
 
 async function requestDetectionsWithFallback(
-  primary: DetectionProviderConfig,
-  fallback: DetectionProviderConfig | null,
+  primary: VisionProvider,
+  fallback: VisionProvider | null,
   imageData: string,
   prompt: string,
   timeoutMs = visionDetectionTimeoutMs,
@@ -499,15 +490,12 @@ async function handlePOST(request: Request) {
       return Response.json({ error: "识别图片不能超过 6MB" }, { status: 400 });
     }
 
-    const apiKey = requireServerEnv("DASHSCOPE_API_KEY");
-    const baseUrl = (getServerEnv("DASHSCOPE_BASE_URL") || "https://dashscope.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
-    const model = getServerEnv("DASHSCOPE_VISION_MODEL") || "qwen3-vl-flash";
+    const primaryProvider = getPrimaryVisionProvider();
     const arkApiKey = getServerEnv("ARK_API_KEY").trim();
     const arkVisionModel = getServerEnv("ARK_VISION_MODEL").trim();
-    const primaryProvider: DetectionProviderConfig = { name: "dashscope", baseUrl, apiKey, model };
     // Ark model access is account-specific. An API key alone is insufficient:
     // only enable the fallback when an authorized model/endpoint ID is explicit.
-    const arkFallback: DetectionProviderConfig | null = arkApiKey && arkVisionModel ? {
+    const arkFallback: VisionProvider | null = arkApiKey && arkVisionModel ? {
       name: "volcengine-ark",
       apiKey: arkApiKey,
       model: arkVisionModel,
@@ -526,17 +514,19 @@ ${jsonRules}`;
 必须依次确认头部帽子、颈部领带/领结/围巾、颈手部首饰、腰间独立腰带、肩背或手持包、脚部鞋履，同时也要完整输出上衣、外套和裤裙。不要因为单品较小、被手握住、被身体局部遮挡或靠近图片边缘就省略。
 ${jsonRules}`;
 
-    // A full-outfit pass and an accessory-focused pass run together. Either
-    // successful result is useful, and the merge makes a single slow request
-    // incapable of collapsing the response to just a top.
     const scanStartedAt = performance.now();
-    const detectionRuns = await Promise.allSettled([
-      requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, outfitPrompt),
-      requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, detailPrompt),
-    ]);
+    // Kimi's full scan includes accessories. Parallel scans can exhaust its
+    // concurrency quota before either response is complete.
+    const useKimi = primaryProvider.name === "moonshot";
+    const detectionRuns = await Promise.allSettled(useKimi
+      ? [requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, detailPrompt, kimiDetectionTimeoutMs)]
+      : [
+        requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, outfitPrompt),
+        requestDetectionsWithFallback(primaryProvider, arkFallback, imageData, detailPrompt),
+      ]);
     let general = detectionRuns[0].status === "fulfilled" ? detectionRuns[0].value : [];
-    const focusedItems = detectionRuns[1].status === "fulfilled" ? detectionRuns[1].value : [];
-    if (!general.length && !focusedItems.length) {
+    const focusedItems = detectionRuns[1]?.status === "fulfilled" ? detectionRuns[1].value : [];
+    if (!useKimi && !general.length && !focusedItems.length) {
       // The domestic VLM can reject a short burst immediately while a normal
       // inference takes many seconds. Retry one comprehensive pass only for
       // this fast-failure signature; never stack another long request after a

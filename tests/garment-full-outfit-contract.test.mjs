@@ -62,7 +62,8 @@ test("视觉识别在 DashScope 欠费或不可用时可降级到显式配置的
   assert.match(analyzer, /arkApiKey && arkVisionModel/);
   assert.match(analyzer, /defaultArkBaseUrl = "https:\/\/ark\.cn-beijing\.volces\.com\/api\/v3"/);
   assert.match(analyzer, /requestDetectionsWithFallback\(primaryProvider, arkFallback/);
-  assert.match(analyzer, /if \(provider\.name === "dashscope"\) requestBody\.enable_thinking = false/);
+  const visionProvider = await read("../app/lib/vision-provider.ts");
+  assert.match(visionProvider, /provider\.name === "dashscope" \? \{ enable_thinking: false \}/);
   assert.match(analyzer, /!hasBillingFailure/);
   assert.match(envExample, /^ARK_VISION_MODEL=$/m);
   assert.match(envExample, /^ARK_BASE_URL=https:\/\/ark\.cn-beijing\.volces\.com\/api\/v3$/m);

@@ -1,6 +1,6 @@
 import { dbAll } from "../../../lib/db";
 import { getOwner, ownerJson } from "../../../lib/owner";
-import { getServerEnv, requireServerEnv } from "../../../lib/server-env";
+import { getPrimaryVisionProvider, visionChatOptions } from "../../../lib/vision-provider";
 import { normalizeGarmentAITags } from "../../../lib/garment-tags";
 import { reviewOutfit, type WardrobeMatchItem } from "../../../lib/outfit-engine";
 import { apiErrorResponse } from "../../../lib/observability";
@@ -28,9 +28,8 @@ function parseTags(row: WardrobeRow) {
 
 async function aiSuggestion(items: WardrobeMatchItem[], breakdown: Record<string, number>, scene: string) {
   try {
-    const apiKey = requireServerEnv("DASHSCOPE_API_KEY");
-    const baseUrl = (getServerEnv("DASHSCOPE_BASE_URL") || "https://dashscope.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
-    const model = getServerEnv("DASHSCOPE_VISION_MODEL") || "qwen3-vl-flash";
+    const provider = getPrimaryVisionProvider();
+    const { apiKey, baseUrl } = provider;
     const itemDesc = items.map(item => `${item.name}（${item.category}·${item.colorName}）`).join("、");
     const prompt = `你是 衣刻WeMo 的穿搭顾问。用户手动搭配了一套：${itemDesc}。场景是${scene}。
 系统从颜色、版型、场合、天气四方面打分（满分100）：颜色${Math.round(breakdown.color)}、版型${Math.round(breakdown.silhouette)}、场合${Math.round(breakdown.occasion)}、天气${Math.round(breakdown.weather)}。
@@ -39,11 +38,8 @@ async function aiSuggestion(items: WardrobeMatchItem[], breakdown: Record<string
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
-        temperature: 0.4,
-        enable_thinking: false,
+        ...visionChatOptions(provider, 0.4, 200),
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 200,
       }),
       signal: AbortSignal.timeout(30_000),
     });

@@ -1,4 +1,4 @@
-import { getServerEnv, requireServerEnv } from "../../../lib/server-env";
+import { getPrimaryVisionProvider, visionChatOptions } from "../../../lib/vision-provider";
 import { getOwner, ownerJson } from "../../../lib/owner";
 import { dbAll } from "../../../lib/db";
 import {
@@ -198,20 +198,16 @@ async function handlePOST(request: Request) {
     }
 
     let editorResult: Record<string, unknown> = {};
-    let selectionSource: "qwen-editor" | "rules-fallback" = "rules-fallback";
+    let selectionSource: "qwen-editor" | "kimi-editor" | "rules-fallback" = "rules-fallback";
     const editorStartedAt = performance.now();
     try {
-      const apiKey = requireServerEnv("DASHSCOPE_API_KEY");
-      const baseUrl = (getServerEnv("DASHSCOPE_BASE_URL") || "https://dashscope.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
-      const model = getServerEnv("DASHSCOPE_VISION_MODEL") || "qwen3-vl-flash";
+      const provider = getPrimaryVisionProvider();
+      const { apiKey, baseUrl } = provider;
       const response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
-          temperature: 0.2,
-          enable_thinking: false,
-          max_tokens: 900,
+          ...visionChatOptions(provider, 0.2, 900),
           messages: [{ role: "user", content: `你是 衣刻WeMo 的时装编辑。系统已经按颜色、版型、天气、场合和偏好计算出候选搭配，你只负责从候选中挑出三套最有审美、且彼此有差异的方案，不得新增、删除或替换候选里的单品。
 
 用户需求：${prompt}
@@ -227,12 +223,12 @@ async function handlePOST(request: Request) {
 4. reason 用朋友口吻，说明颜色、比例、天气和场合，不提分数、算法、编号或 UUID。
 5. 只返回严格JSON对象：{"recommendations":[{"candidateId":"candidate-01","title":"","reason":"","highlights":[],"missingSuggestion":""}]}。` }],
         }),
-        signal: AbortSignal.timeout(3_800),
+        signal: AbortSignal.timeout(provider.name === "moonshot" ? 20_000 : 3_800),
       });
       const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message || "AI 搭配暂时不可用");
       editorResult = parseJsonObject(payload.choices?.[0]?.message?.content || "");
-      selectionSource = "qwen-editor";
+      selectionSource = provider.name === "moonshot" ? "kimi-editor" : "qwen-editor";
     } catch (error) {
       logServerEvent("warn", "outfit_editor_fallback", {
         reason: error instanceof Error ? error.name : typeof error,
