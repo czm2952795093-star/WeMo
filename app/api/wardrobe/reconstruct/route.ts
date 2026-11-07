@@ -63,7 +63,7 @@ const DEFAULT_ARK_SIZE = "1920x1920";
 const DEFAULT_ARK_CANDIDATES = 2;
 const MIN_SAFE_ARK_PIXELS = 2_560 * 1_440;
 const MAX_SAFE_ARK_PIXELS = 4_096 * 4_096;
-const PROMPT_VERSION = "garment-reconstruction-v4";
+const PROMPT_VERSION = "garment-reconstruction-v5";
 const resultCache = new Map<string, ReconstructionResult>();
 const inFlight = new Map<string, Promise<ReconstructionResult>>();
 const maxCacheEntries = 30;
@@ -247,6 +247,7 @@ async function inspectCompleteness(bytes: Buffer, category: string) {
   }
   const background = [0, 1, 2].map(channel => cornerPixels.reduce((sum, pixel) => sum + pixel[channel], 0) / cornerPixels.length);
   let foreground = 0;
+  const visibleBounds = [192, 192, -1, -1];
   const componentForegroundMask = new Uint8Array(192 * 192);
   for (let y = 0; y < 192; y++) {
     for (let x = 0; x < 192; x++) {
@@ -265,6 +266,14 @@ async function inspectCompleteness(bytes: Buffer, category: string) {
       // Exclude pale product shadows: they can visually bridge separate items
       // and make a multi-garment result look like one connected component.
       if (average < 230 || saturation > 18) componentForegroundMask[y * 192 + x] = 1;
+      // Frame conservatively so the stricter component mask cannot cut off
+      // pale fabric that blends into the white background.
+      if (distance >= 10) {
+        visibleBounds[0] = Math.min(visibleBounds[0], x);
+        visibleBounds[1] = Math.min(visibleBounds[1], y);
+        visibleBounds[2] = Math.max(visibleBounds[2], x);
+        visibleBounds[3] = Math.max(visibleBounds[3], y);
+      }
       if (distance < 18 && brightnessDrop < 12) continue;
       foreground += 1;
     }
@@ -272,19 +281,22 @@ async function inspectCompleteness(bytes: Buffer, category: string) {
   const cornersAreLight = background.every(value => value >= 235);
   const hasSubject = foreground >= 192 * 192 * 0.015;
   const components = inspectGarmentComponents(componentForegroundMask, 192, 192, category);
-  const sourceMargin = hasSubject && components.significantBounds
-    ? Math.min(
-      components.significantBounds[0],
-      components.significantBounds[1],
-      191 - components.significantBounds[2],
-      191 - components.significantBounds[3],
-    ) / 192
+  const bounds = components.significantBounds;
+  const sourceMargin = hasSubject && bounds
+    ? Math.min(bounds[0], bounds[1], 191 - bounds[2], 191 - bounds[3]) / 192
     : 0;
+  const framingBounds: [number, number, number, number] | null = bounds && [
+    Math.min(bounds[0], visibleBounds[0]),
+    Math.min(bounds[1], visibleBounds[1]),
+    Math.max(bounds[2], visibleBounds[2]),
+    Math.max(bounds[3], visibleBounds[3]),
+  ];
   return {
     completeness: cornersAreLight && hasSubject && sourceMargin >= 0.005 && components.status === "pass"
       ? "pass" as const
       : "review" as const,
     components,
+    framingBounds,
   };
 }
 
@@ -439,7 +451,7 @@ async function requestAliyunReconstruction(input: ReconstructionRequest, deadlin
       bestCandidate ||= candidate;
       attemptedCandidates += 1;
       if (quality.completeness !== "pass" || quality.components.status !== "pass") continue;
-      const bytes = await normalizeProductImage(rawBytes, quality.components.significantBounds);
+      const bytes = await normalizeProductImage(rawBytes, quality.framingBounds);
       return {
         bytes,
         model: input.model,
@@ -578,7 +590,7 @@ async function requestArkReconstruction(input: ReconstructionRequest, deadlineAt
         continue;
       }
       return {
-        bytes: await normalizeProductImage(rawBytes, quality.components.significantBounds),
+        bytes: await normalizeProductImage(rawBytes, quality.framingBounds),
         model: input.arkModel,
         provider: "volcengine-seedream" as const,
         providerMs: Math.round(performance.now() - startedAt),

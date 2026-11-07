@@ -156,7 +156,7 @@ test("阿里欠费或鉴权失败时仅降级一次到支持双参考图的 Seed
   assert.match(arkRequest, /correctionReference = await arkInputDataUrl\(rawBytes, 1_536\)/);
   assert.match(reconstructor, /最后一张参考图是上一次未通过完整性检查的候选/);
   assert.match(reconstructor, /components\.significantBounds/);
-  assert.match(reconstructor, /normalizeProductImage\(rawBytes, quality\.components\.significantBounds\)/);
+  assert.match(arkRequest, /normalizeProductImage\(rawBytes, quality\.framingBounds\)/);
   assert.match(arkRequest, /sequential_image_generation: "disabled"/);
   assert.match(arkRequest, /response_format: "url"/);
 

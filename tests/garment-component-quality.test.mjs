@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import sharp from "sharp";
 import ts from "typescript";
 
-function compileCommonJs(path) {
-  const source = readFileSync(new URL(path, import.meta.url), "utf8");
+function compileCommonJs(path, dependencies = {}, extraSource = "") {
+  const source = readFileSync(new URL(path, import.meta.url), "utf8") + extraSource;
   const output = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   const compiledModule = { exports: {} };
-  new Function("require", "module", "exports", output)(() => undefined, compiledModule, compiledModule.exports);
+  new Function("require", "module", "exports", output)(name => dependencies[name], compiledModule, compiledModule.exports);
   return compiledModule.exports;
 }
 
@@ -84,4 +85,21 @@ test("即使分离部件间距很小也不会被错误合并", () => {
   const result = quality.inspectGarmentComponents(garment, 192, 192, "外套");
   assert.equal(result.status, "review");
   assert.equal(result.componentCount, 2);
+});
+
+test("商品图构图保留连通组件蒙版之外的浅色袖子", async () => {
+  const { inspectCompleteness } = compileCommonJs("../app/api/wardrobe/reconstruct/route.ts", {
+    sharp,
+    "../../../lib/garment-component-quality": quality,
+  }, "\nexport { inspectCompleteness };");
+  const sample = await sharp(Buffer.from(`<svg width="192" height="192" xmlns="http://www.w3.org/2000/svg">
+    <rect width="192" height="192" fill="white"/>
+    <rect x="24" y="48" width="144" height="46" fill="#faf7ed"/>
+    <rect x="62" y="30" width="68" height="130" fill="#ddd2bd"/>
+  </svg>`)).png().toBuffer();
+
+  const result = await inspectCompleteness(sample, "上衣");
+  assert.equal(result.completeness, "pass");
+  assert.deepEqual(result.components.significantBounds, [62, 30, 129, 159]);
+  assert.deepEqual(result.framingBounds, [24, 30, 167, 159]);
 });
